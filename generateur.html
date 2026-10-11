@@ -348,6 +348,28 @@ document.getElementById('waBtn').onclick = function(){
   var txt = 'Salam 👋\nHadi démo dyal menu digital dyal *' + name + '*, jerebha:\n' + lastLink + '\n\n— TAPBusiness.ma 🍽️';
   window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
 };
+/* ---------- Pré-remplissage via ?edit= (lien d'édition client) ---------- */
+(function initFromEdit(){
+  try {
+    var m = window.location.search.match(/[?&]edit=([^&]+)/);
+    if (!m) return;
+    var b64 = m[1].replace(/-/g,'+').replace(/_/g,'/');
+    while (b64.length % 4) b64 += '=';
+    var d = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    if (!d) return;
+    if (d.n) document.getElementById('restoName').value = d.n;
+    if (d.w) document.getElementById('restoWa').value = d.w;
+    (d.c || []).forEach(function(c){ if (CATS.indexOf(c[1]) < 0) CATS.push(c[1]); });
+    rowsEl.innerHTML = '';
+    (d.i || []).forEach(function(it){
+      var lab = CATS[0], k;
+      for (k = 0; k < (d.c || []).length; k++) if (d.c[k][0] === it[0]){ lab = d.c[k][1]; break; }
+      addRow(lab, it[1], it[2]);
+    });
+    document.querySelector('header p').textContent = '✏️ Modifiez votre menu puis régénérez le lien';
+  } catch(_){}
+})();
+
 updateCount();
 })();
 </script>
