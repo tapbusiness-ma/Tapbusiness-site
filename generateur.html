@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Générateur de démo — TAPBusiness.ma</title>
+<meta name="description" content="Créez une démo de menu digital en 5 minutes à partir du PDF du restaurant.">
+<style>
+:root{--teal:#0d9488;--teal-d:#0a756c;--bg:#f4f6f8;--card:#fff;--txt:#16212b;--mut:#6b7a88;--line:#e4e9ee}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);padding-bottom:120px}
+header{background:var(--teal);color:#fff;padding:26px 20px 22px;text-align:center}
+header h1{font-size:24px}
+header p{opacity:.9;font-size:14px;margin-top:6px}
+main{max-width:640px;margin:0 auto;padding:18px 14px}
+.step{background:var(--card);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+.step h2{font-size:17px;margin-bottom:4px}
+.step .hint{font-size:13px;color:var(--mut);margin-bottom:12px}
+label.f{display:block;font-size:13px;font-weight:600;color:var(--mut);margin:10px 0 4px}
+input[type=text],input[type=number],select{width:100%;padding:13px;border:1.5px solid var(--line);border-radius:10px;font-size:16px;background:#fff}
+input:focus,select:focus{outline:none;border-color:var(--teal)}
+.drop{border:2px dashed var(--teal);border-radius:14px;padding:30px 16px;text-align:center;color:var(--teal);font-weight:600;cursor:pointer;background:#eefbf9}
+.drop small{display:block;color:var(--mut);font-weight:400;margin-top:6px}
+#pdfProg{display:none;margin-top:10px;font-size:14px;color:var(--mut)}
+.row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.row select{flex:0 0 118px;font-size:14px;padding:13px 6px}
+.row input.nm{flex:1}
+.row input.px{flex:0 0 76px}
+.del{flex:0 0 40px;height:48px;border:none;background:#fdecec;color:#d33;border-radius:10px;font-size:18px;cursor:pointer}
+.btn{display:block;width:100%;padding:15px;border:none;border-radius:12px;font-size:17px;font-weight:700;cursor:pointer;margin-top:10px}
+.btn-teal{background:var(--teal);color:#fff}
+.btn-teal:active{background:var(--teal-d)}
+.btn-ghost{background:#eef1f4;color:var(--txt)}
+.btn-wa{background:#25D366;color:#fff}
+.count{font-size:14px;color:var(--mut);margin:8px 0}
+#result{display:none}
+#linkBox{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;color:var(--mut);background:#fafbfc;margin-top:8px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.empty{color:var(--mut);font-size:14px;text-align:center;padding:14px}
+footer{text-align:center;color:var(--mut);font-size:12px;margin-top:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛠️ Générateur de démo</h1>
+  <p>PDF du menu → démo partageable en 5 minutes</p>
+</header>
+<main>
+
+  <div class="step">
+    <h2>1️⃣ Menu du restaurant (PDF)</h2>
+    <p class="hint">Uploadez le PDF du menu — les plats et prix se remplissent tout seuls. Vous pourrez tout corriger après.</p>
+    <div class="drop" id="drop">📄 Choisir un fichier PDF<small>ou glissez-déposez le fichier ici</small></div>
+    <input type="file" id="pdfFile" accept="application/pdf" style="display:none">
+    <div id="pdfProg">⏳ Lecture du PDF…</div>
+  </div>
+
+  <div class="step">
+    <h2>2️⃣ Infos restaurant</h2>
+    <label class="f">Nom du restaurant *</label>
+    <input type="text" id="restoName" placeholder="Ex : Chez Yasmine">
+    <label class="f">WhatsApp du restaurant (optionnel)</label>
+    <input type="text" id="restoWa" placeholder="06XXXXXXXX — vide = mon numéro">
+  </div>
+
+  <div class="step">
+    <h2>3️⃣ Plats & prix</h2>
+    <p class="hint">Vérifiez / corrigez ce qui a été détecté, ou ajoutez à la main.</p>
+    <div class="count" id="count">0 plat</div>
+    <div id="rows"></div>
+    <button class="btn btn-ghost" id="addRow" type="button">＋ Ajouter un plat</button>
+    <button class="btn btn-ghost" id="fillExample" type="button">✨ Remplir un exemple (test)</button>
+  </div>
+
+  <div class="step">
+    <h2>4️⃣ Générer le lien démo</h2>
+    <button class="btn btn-teal" id="generate" type="button">🔗 Générer le lien démo</button>
+    <div id="result">
+      <input id="linkBox" readonly>
+      <div class="actions">
+        <button class="btn btn-teal" id="copyBtn" type="button">📋 Copier</button>
+        <button class="btn btn-ghost" id="openBtn" type="button">👁️ Ouvrir</button>
+      </div>
+      <button class="btn btn-wa" id="waBtn" type="button">💬 Envoyer sur WhatsApp</button>
+    </div>
+  </div>
+
+  <footer>TAPBusiness.ma — outil interne</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function(){
+'use strict';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+var BASE_URL = 'https://tapbusiness-ma.github.io/Tapbusiness-site/demo.html';
+var MY_WA = '212720163682';
+var rowsEl = document.getElementById('rows');
+var countEl = document.getElementById('count');
+var CATS = ['🌮 Tacos','🍕 Pizzas','🍔 Burgers','🥗 Salades','🍝 Plats','🥤 Boissons','🍰 Desserts','➕ Autre'];
+
+function catOptions(sel){
+  CATS.forEach(function(c){
+    var o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    if (c === sel) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+function addRow(cat, name, price){
+  var div = document.createElement('div');
+  div.className = 'row';
+  var s = document.createElement('select');
+  CATS.forEach(function(c){
+    var o = document.createElement('option'); o.value = c; o.textContent = c; s.appendChild(o);
+  });
+  if (cat){ for (var i=0;i<s.options.length;i++) if (s.options[i].value===cat){ s.selectedIndex=i; break; } }
+  var nm = document.createElement('input'); nm.type='text'; nm.className='nm'; nm.placeholder='Nom du plat'; nm.value = name||'';
+  var px = document.createElement('input'); px.type='number'; px.className='px'; px.placeholder='DH'; px.min='0'; px.value = (price==null?'':price);
+  var del = document.createElement('button'); del.type='button'; del.className='del'; del.textContent='✕';
+  del.onclick = function(){ div.remove(); updateCount(); };
+  div.appendChild(s); div.appendChild(nm); div.appendChild(px); div.appendChild(del);
+  rowsEl.appendChild(div);
+  updateCount();
+}
+function updateCount(){
+  var n = rowsEl.querySelectorAll('.row').length;
+  countEl.textContent = n + (n>1?' plats':' plat');
+}
+document.getElementById('addRow').onclick = function(){ addRow(); };
+document.getElementById('fillExample').onclick = function(){
+  rowsEl.innerHTML='';
+  addRow('🌮 Tacos','Tacos Poulet',45);
+  addRow('🌮 Tacos','Tacos Viande Hachée',50);
+  addRow('🍕 Pizzas','Pizza 4 Fromages',65);
+  addRow('🥤 Boissons',"Jus d'Avocat",25);
+  if (!document.getElementById('restoName').value) document.getElementById('restoName').value = 'Chez Yasmine';
+};
+
+/* ---------- PDF : extraction + parsing ---------- */
+var drop = document.getElementById('drop');
+var fileInput = document.getElementById('pdfFile');
+var prog = document.getElementById('pdfProg');
+drop.onclick = function(){ fileInput.click(); };
+fileInput.onchange = function(){ if (fileInput.files[0]) readPDF(fileInput.files[0]); };
+
+function readPDF(file){
+  prog.style.display = 'block';
+  prog.textContent = '⏳ Lecture du PDF…';
+  var reader = new FileReader();
+  reader.onload = function(){
+    pdfjsLib.getDocument({data: new Uint8Array(reader.result)}).promise.then(function(pdf){
+      var promises = [];
+      for (var p=1; p<=pdf.numPages; p++) promises.push(pageLines(pdf, p));
+      return Promise.all(promises);
+    }).then(function(pages){
+      var lines = [];
+      pages.forEach(function(ls){ lines = lines.concat(ls); });
+      prog.textContent = '⏳ Analyse de ' + lines.length + ' lignes…';
+      setTimeout(function(){
+        var parsed = parseMenu(lines);
+        prog.style.display = 'none';
+        if (!parsed.items.length){
+          prog.style.display = 'block';
+          prog.textContent = '⚠️ Rien détecté — ajoutez les plats à la main 👇';
+          return;
+        }
+        rowsEl.innerHTML = '';
+        // catégories détectées -> ajouter au select si nouvelles
+        parsed.cats.forEach(function(c){
+          if (CATS.indexOf(c) < 0) CATS.push(c);
+        });
+        parsed.items.forEach(function(it){ addRow(it.cat, it.name, it.price); });
+        prog.style.display = 'block';
+        prog.textContent = '✅ ' + parsed.items.length + ' plats détectés — vérifiez-les 👇';
+      }, 50);
+    }).catch(function(e){
+      prog.textContent = '❌ Impossible de lire ce PDF — ajoutez à la main 👇';
+    });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function pageLines(pdf, p){
+  return pdf.getPage(p).then(function(page){
+    return page.getTextContent().then(function(tc){
+      var lines = [], cur = '';
+      tc.items.forEach(function(it){
+        cur += it.str;
+        if (it.hasEOL){ lines.push(cur); cur=''; }
+      });
+      if (cur.trim()) lines.push(cur);
+      return lines;
+    });
+  });
+}
+
+function slug(s){
+  return s.toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]+/gi,'-').replace(/^-+|-+$/g,'') || 'cat';
+}
+function parseMenu(lines){
+  var cats = [], items = [], seen = {}, cur = null, ci = 0;
+  function newCat(label){
+    ci++;
+    var c = {id:'c'+ci+'-'+slug(label).slice(0,18), label:label};
+    // emoji par défaut selon mots-clés
+    var l = label.toLowerCase(), em = '🍽️';
+    if (/tacos|taco/.test(l)) em='🌮'; else if (/pizza/.test(l)) em='🍕';
+    else if (/burger/.test(l)) em='🍔'; else if (/boisson|jus|soda|café|thé|drink/.test(l)) em='🥤';
+    else if (/dessert|glace|tiramisu|gâteau/.test(l)) em='🍰'; else if (/salade/.test(l)) em='🥗';
+    else if (/plat|grillade|viande|poulet|poisson|tagine|couscous/.test(l)) em='🍝';
+    c.label = em + ' ' + label.charAt(0).toUpperCase() + label.slice(1);
+    cats.push(c); cur = c; return c;
+  }
+  lines.forEach(function(raw){
+    var line = String(raw||'').replace(/\s+/g,' ').trim();
+    if (!line || line.length < 2) return;
+    var m = line.match(/^(.*?)[\s.·•_~\-–—]*(\d+(?:[.,]\d{1,2})?)\s*(DH|DHS|MAD|درهم|dh)?\s*$/);
+    if (m){
+      var namePart = m[1].replace(/[.\-–—_~]{2,}/g,' ').replace(/\s+/g,' ').trim();
+      var price = parseFloat(m[2].replace(',','.'));
+      var okName = namePart.length >= 3 && !/\/\s*$/.test(namePart) && !/^\d/.test(namePart);
+      if (okName && price >= 3 && price <= 5000){
+        if (!cur) cur = newCat('Menu');
+        var key = (cur.id+'|'+namePart.toLowerCase());
+        if (!seen[key]){
+          seen[key] = 1;
+          items.push({cat:cur.label, name:namePart, price:Math.round(price)});
+        }
+        return;
+      }
+    }
+    var clean = line.replace(/[^a-zA-ZÀ-ÿ\u0600-\u06FF'’ ]/g,'').trim();
+    if (clean.length >= 3 && clean.length <= 30 && !/\d/.test(clean)) newCat(clean);
+  });
+  return {cats: cats.map(function(c){return c.label;}), items: items};
+}
+
+/* ---------- Génération du lien ---------- */
+function b64url(obj){
+  var json = JSON.stringify(obj);
+  return btoa(unescape(encodeURIComponent(json))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+var lastLink = '';
+document.getElementById('generate').onclick = function(){
+  var name = document.getElementById('restoName').value.trim();
+  if (!name){ alert('كتب سمية الريسطو هو اللول ⚠️'); document.getElementById('restoName').focus(); return; }
+  var wa = document.getElementById('restoWa').value.replace(/\D/g,'');
+  if (wa && wa.charAt(0)==='0') wa = '212' + wa.slice(1);
+  var rows = rowsEl.querySelectorAll('.row');
+  var catMap = {}, cats = [], items = [];
+  rows.forEach(function(r){
+    var label = r.querySelector('select').value;
+    var nm = r.querySelector('.nm').value.trim();
+    var px = parseFloat(r.querySelector('.px').value);
+    if (!nm || !(px >= 0)) return;
+    if (!catMap[label]){ catMap[label] = 'c' + (cats.length+1); cats.push([catMap[label], label]); }
+    items.push([catMap[label], nm, Math.round(px)]);
+  });
+  if (!items.length){ alert('زيد شي طبق هو اللول ⚠️'); return; }
+  var data = {n:name, c:cats, i:items};
+  if (wa) data.w = wa;
+  lastLink = BASE_URL + '?d=' + b64url(data);
+  document.getElementById('linkBox').value = lastLink;
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('result').scrollIntoView({behavior:'smooth'});
+};
+function copyLink(){
+  var box = document.getElementById('linkBox');
+  box.select(); box.setSelectionRange(0, 99999);
+  function done(){ var b=document.getElementById('copyBtn'); b.textContent='✅ Copié !'; setTimeout(function(){b.textContent='📋 Copier';},1800); }
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(lastLink).then(done).catch(function(){ document.execCommand('copy'); done(); });
+  } else { document.execCommand('copy'); done(); }
+}
+document.getElementById('copyBtn').onclick = copyLink;
+document.getElementById('openBtn').onclick = function(){ if (lastLink) window.open(lastLink, '_blank'); };
+document.getElementById('waBtn').onclick = function(){
+  if (!lastLink) return;
+  var name = document.getElementById('restoName').value.trim();
+  var txt = 'Salam 👋\nHadi démo dyal menu digital dyal *' + name + '*, jerebha:\n' + lastLink + '\n\n— TAPBusiness.ma 🍽️';
+  window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+};
+updateCount();
+})();
+</script>
+</body>
+</html>
