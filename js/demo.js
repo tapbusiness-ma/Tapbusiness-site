@@ -226,6 +226,27 @@
   document.getElementById('dmClose').addEventListener('click', closeDrawer);
   overlay.addEventListener('click', closeDrawer);
 
+  /* ---------- Lien d'édition (espace client) ---------- */
+  (function(){
+    var editEl = document.getElementById('dmEdit');
+    if (!editEl) return;
+    function b64url(o){
+      try {
+        return btoa(unescape(encodeURIComponent(JSON.stringify(o))))
+          .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+      } catch(_){ return ''; }
+    }
+    var ed = {
+      n: restoName,
+      c: CATS.map(function(c){ return [c.id, c.label]; }),
+      i: ITEMS.map(function(it){ return [it.cat, it.name, it.price]; })
+    };
+    if (CUSTOM && CUSTOM.w) ed.w = CUSTOM.w;
+    var code = b64url(ed);
+    if (code) editEl.href = 'generateur.html?edit=' + code;
+    else editEl.style.display = 'none';
+  })();
+
   renderItems();
   updateCart();
 })();
