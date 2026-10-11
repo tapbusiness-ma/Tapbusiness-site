@@ -4,6 +4,24 @@
 
   var WA_NUMBER = '212720163682';
 
+  /* ---------- Données personnalisées depuis ?d= (générateur de démo) ---------- */
+  function getCustomData(){
+    try {
+      var m = window.location.search.match(/[?&]d=([^&]+)/);
+      if (!m) return null;
+      var b64 = m[1].replace(/-/g,'+').replace(/_/g,'/');
+      while (b64.length % 4) b64 += '=';
+      var json = decodeURIComponent(escape(atob(b64)));
+      var d = JSON.parse(json);
+      return (d && d.n && d.i && d.i.length) ? d : null;
+    } catch(_){ return null; }
+  }
+  var CUSTOM = getCustomData();
+  if (CUSTOM && CUSTOM.w) {
+    var _w = String(CUSTOM.w).replace(/\D/g,'');
+    if (_w) WA_NUMBER = _w;
+  }
+
   /* ---------- Nom du restaurant depuis ?r= ---------- */
   function getSlug(){
     try {
@@ -16,7 +34,7 @@
       return w.charAt(0).toUpperCase() + w.slice(1);
     }).join(' ') || 'Restaurant Démo';
   }
-  var restoName = titleCase(getSlug());
+  var restoName = (CUSTOM && CUSTOM.n) ? String(CUSTOM.n) : titleCase(getSlug());
   document.getElementById('dmName').textContent = '🍽️ ' + restoName;
   document.title = restoName + ' — Menu Digital (Démo)';
 
@@ -28,13 +46,18 @@
     if (typeof IMGS3 !== 'undefined') for (var k3 in IMGS3) IMG[k3] = IMGS3[k3];
   } catch(_){}
 
-  var CATS = [
+  var DEFAULT_CATS = [
     { id:'tacos',    label:'🌮 Tacos' },
     { id:'pizzas',   label:'🍕 Pizzas' },
     { id:'boissons', label:'🥤 Boissons' },
     { id:'desserts', label:'🍰 Desserts' }
   ];
-  var ITEMS = [
+  var CATS = (CUSTOM && CUSTOM.c && CUSTOM.c.length)
+    ? CUSTOM.c.map(function(x){ return { id:String(x[0]), label:String(x[1]) }; })
+    : DEFAULT_CATS;
+  var ITEMS = (CUSTOM && CUSTOM.i && CUSTOM.i.length)
+    ? CUSTOM.i.map(function(x, i){ return { id:i, cat:String(x[0]), name:String(x[1]), price:(+x[2])||0 }; })
+    : [
     { cat:'tacos',    name:'Tacos Poulet XL',      price:45, img:'tacos-poulet-xl' },
     { cat:'tacos',    name:'Tacos Viande Hachée',  price:40, img:'tacos-viande-hachee' },
     { cat:'tacos',    name:'Tacos Mixte XXL',      price:55, img:'tacos-mixte-xxl' },
@@ -98,7 +121,7 @@
       if (it.cat !== activeCat) return;
       var src = IMG[it.img] || '';
       html += '<article class="dm-card">'
-        + '<img class="dm-photo" src="' + src + '" alt="' + esc(it.name) + '" loading="lazy">'
+        + (src ? '<img class="dm-photo" src="' + src + '" alt="' + esc(it.name) + '" loading="lazy">' : '')
         + '<div class="dm-info"><h3>' + esc(it.name) + '</h3>'
         + '<span class="dm-price">' + it.price + ' DH</span></div>'
         + '<button class="dm-add" type="button" data-id="' + it.id + '" aria-label="Ajouter ' + esc(it.name) + '">+</button>'
@@ -154,7 +177,7 @@
     ids.forEach(function(id){
       var it = ITEMS[+id], q = cart[id], src = IMG[it.img] || '';
       html += '<div class="dm-line">'
-        + '<img src="' + src + '" alt="">'
+        + (src ? '<img src="' + src + '" alt="">' : '')
         + '<div><b>' + esc(it.name) + '</b><span>' + it.price + ' DH</span></div>'
         + '<div class="dm-qty">'
         + '<button type="button" data-a="-" data-id="' + id + '">−</button>'
