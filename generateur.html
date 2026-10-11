@@ -50,8 +50,8 @@ footer{text-align:center;color:var(--mut);font-size:12px;margin-top:20px}
   <div class="step">
     <h2>1️⃣ Menu du restaurant (PDF)</h2>
     <p class="hint">Uploadez le PDF du menu — les plats et prix se remplissent tout seuls. Vous pourrez tout corriger après.</p>
-    <div class="drop" id="drop">📄 Choisir un fichier PDF<small>ou glissez-déposez le fichier ici</small></div>
-    <input type="file" id="pdfFile" accept="application/pdf" style="display:none">
+    <div class="drop" id="drop">📄 Choisir PDF ou photo du menu<small>ou glissez-déposez le fichier ici</small></div>
+    <input type="file" id="pdfFile" accept="application/pdf,image/*" style="display:none">
     <div id="pdfProg">⏳ Lecture du PDF…</div>
   </div>
 
@@ -89,6 +89,7 @@ footer{text-align:center;color:var(--mut);font-size:12px;margin-top:20px}
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
 <script>
 (function(){
 'use strict';
@@ -143,7 +144,24 @@ var drop = document.getElementById('drop');
 var fileInput = document.getElementById('pdfFile');
 var prog = document.getElementById('pdfProg');
 drop.onclick = function(){ fileInput.click(); };
-fileInput.onchange = function(){ if (fileInput.files[0]) readPDF(fileInput.files[0]); };
+fileInput.onchange = function(){
+  var f = fileInput.files[0];
+  if (!f) return;
+  if (f.type === 'application/pdf') readPDF(f);
+  else readImageFile(f);
+};
+
+function fillFromParsed(parsed, via){
+  if (!parsed.items.length) return false;
+  rowsEl.innerHTML = '';
+  parsed.cats.forEach(function(c){
+    if (CATS.indexOf(c) < 0) CATS.push(c);
+  });
+  parsed.items.forEach(function(it){ addRow(it.cat, it.name, it.price); });
+  prog.style.display = 'block';
+  prog.textContent = '✅ ' + parsed.items.length + ' plats détectés' + (via ? ' (' + via + ')' : '') + ' — vérifiez-les 👇';
+  return true;
+}
 
 function readPDF(file){
   prog.style.display = 'block';
@@ -153,33 +171,80 @@ function readPDF(file){
     pdfjsLib.getDocument({data: new Uint8Array(reader.result)}).promise.then(function(pdf){
       var promises = [];
       for (var p=1; p<=pdf.numPages; p++) promises.push(pageLines(pdf, p));
-      return Promise.all(promises);
-    }).then(function(pages){
+      return Promise.all(promises).then(function(pages){ return {pdf:pdf, pages:pages}; });
+    }).then(function(res){
       var lines = [];
-      pages.forEach(function(ls){ lines = lines.concat(ls); });
-      prog.textContent = '⏳ Analyse de ' + lines.length + ' lignes…';
-      setTimeout(function(){
-        var parsed = parseMenu(lines);
-        prog.style.display = 'none';
-        if (!parsed.items.length){
-          prog.style.display = 'block';
-          prog.textContent = '⚠️ Rien détecté — ajoutez les plats à la main 👇';
-          return;
-        }
-        rowsEl.innerHTML = '';
-        // catégories détectées -> ajouter au select si nouvelles
-        parsed.cats.forEach(function(c){
-          if (CATS.indexOf(c) < 0) CATS.push(c);
-        });
-        parsed.items.forEach(function(it){ addRow(it.cat, it.name, it.price); });
-        prog.style.display = 'block';
-        prog.textContent = '✅ ' + parsed.items.length + ' plats détectés — vérifiez-les 👇';
-      }, 50);
+      res.pages.forEach(function(ls){ lines = lines.concat(ls); });
+      var parsed = parseMenu(lines);
+      if (parsed.items.length >= 3){ fillFromParsed(parsed, 'PDF'); return; }
+      // PDF scanné (images) -> OCR
+      ocrPdfPages(res.pdf);
     }).catch(function(e){
       prog.textContent = '❌ Impossible de lire ce PDF — ajoutez à la main 👇';
     });
   };
   reader.readAsArrayBuffer(file);
+}
+
+/* ---------- OCR (Tesseract) : PDF scanné ou photo ---------- */
+var ocrWorker = null;
+function getWorker(){
+  if (ocrWorker) return Promise.resolve(ocrWorker);
+  prog.textContent = '⏳ Chargement du lecteur… (1ère fois seulement)';
+  return Tesseract.createWorker('fra').then(function(w){ ocrWorker = w; return w; });
+}
+function ocrCanvas(canvas, label){
+  return getWorker().then(function(w){
+    prog.textContent = '🔍 Lecture de ' + label + '… ⏳ (30-60s)';
+    return w.recognize(canvas);
+  }).then(function(res){
+    return res.data.text || '';
+  });
+}
+function ocrPdfPages(pdf){
+  var n = Math.min(pdf.numPages, 2);
+  var chain = Promise.resolve(), texts = [];
+  for (var p=1; p<=n; p++){
+    (function(pg){
+      chain = chain.then(function(){
+        return pdf.getPage(pg).then(function(page){
+          var vp = page.getViewport({scale: 2});
+          var cv = document.createElement('canvas');
+          cv.width = vp.width; cv.height = vp.height;
+          return page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise.then(function(){
+            return ocrCanvas(cv, 'page ' + pg + '/' + n);
+          });
+        });
+      }).then(function(t){ texts.push(t); });
+    })(p);
+  }
+  chain.then(function(){
+    var parsed = parseMenu(texts.join('\n').split('\n'));
+    if (!fillFromParsed(parsed, 'OCR')) failManual();
+  }).catch(function(e){ failManual(); });
+}
+function readImageFile(file){
+  prog.style.display = 'block';
+  prog.textContent = '⏳ Lecture de la photo…';
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function(){
+    var maxW = 1600, sc = Math.min(1, maxW / img.width);
+    var cv = document.createElement('canvas');
+    cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    URL.revokeObjectURL(url);
+    ocrCanvas(cv, 'photo').then(function(text){
+      var parsed = parseMenu(text.split('\n'));
+      if (!fillFromParsed(parsed, 'OCR')) failManual();
+    }).catch(function(e){ failManual(); });
+  };
+  img.onerror = function(){ failManual(); };
+  img.src = url;
+}
+function failManual(){
+  prog.style.display = 'block';
+  prog.textContent = '⚠️ Rien détecté — ajoutez les plats à la main 👇';
 }
 
 function pageLines(pdf, p){
