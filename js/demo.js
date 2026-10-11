@@ -2,7 +2,7 @@
 (function(){
   'use strict';
 
-  var WA_NUMBER = '212771899120';
+  var WA_NUMBER = '212720163682';
 
   /* ---------- Nom du restaurant depuis ?r= ---------- */
   function getSlug(){
